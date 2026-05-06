@@ -1,0 +1,200 @@
+create database Egypt_Trade_Matrix
+
+CREATE TABLE countries (
+    country_id INT IDENTITY PRIMARY KEY,
+    country_name VARCHAR(100) UNIQUE NOT NULL
+)
+
+CREATE TABLE products (
+    product_id INT IDENTITY PRIMARY KEY,
+    item_code_fao INT NOT NULL,
+    product_name VARCHAR(255),
+    category VARCHAR(100)
+)
+
+CREATE TABLE years (
+    year INT PRIMARY KEY
+)
+
+CREATE TABLE trade_flows (
+    flow_id INT IDENTITY PRIMARY KEY,
+    flow_type VARCHAR(10) CHECK (flow_type IN ('Export','Import'))
+)
+
+INSERT INTO trade_flows (flow_type)
+VALUES ('Export'), ('Import')
+
+CREATE TABLE units (
+    unit_id INT IDENTITY PRIMARY KEY,
+    unit_name VARCHAR(20) UNIQUE
+)
+
+INSERT INTO units (unit_name)
+VALUES ('Tonnes'), ('Animals')
+
+CREATE TABLE quantity_sources (
+    source_id INT IDENTITY PRIMARY KEY,
+    source_type VARCHAR(20) UNIQUE
+)
+
+INSERT INTO quantity_sources (source_type)
+VALUES ('Original'), ('Calculated')
+
+CREATE TABLE trade_fact (
+    trade_id BIGINT IDENTITY PRIMARY KEY,
+
+    reporter_country_id INT NOT NULL,
+    partner_country_id INT NOT NULL,
+    product_id INT NOT NULL,
+    year INT NOT NULL,
+    flow_id INT NOT NULL,
+    unit_id INT NOT NULL,
+    source_id INT NOT NULL,
+
+    quantity DECIMAL(18,4),
+    trade_value_usd DECIMAL(18,2),
+
+    dataset_primary_key VARCHAR(255),
+
+    CONSTRAINT fk_trade_reporter
+        FOREIGN KEY (reporter_country_id)
+        REFERENCES countries(country_id),
+
+    CONSTRAINT fk_trade_partner
+        FOREIGN KEY (partner_country_id)
+        REFERENCES countries(country_id),
+
+    CONSTRAINT fk_trade_product
+        FOREIGN KEY (product_id)
+        REFERENCES products(product_id),
+
+    CONSTRAINT fk_trade_year
+        FOREIGN KEY (year)
+        REFERENCES years(year),
+
+    CONSTRAINT fk_trade_flow
+        FOREIGN KEY (flow_id)
+        REFERENCES trade_flows(flow_id),
+
+    CONSTRAINT fk_trade_unit
+        FOREIGN KEY (unit_id)
+        REFERENCES units(unit_id),
+
+    CONSTRAINT fk_trade_source
+        FOREIGN KEY (source_id)
+        REFERENCES quantity_sources(source_id)
+)
+
+
+CREATE TABLE staging_trade_data (
+    PrimaryKey VARCHAR(255),
+    Reporter VARCHAR(100),
+    Partner VARCHAR(100),
+    ItemCodeFAO INT,
+    Item VARCHAR(255),
+    Category VARCHAR(100),
+    Year INT,
+    Flow VARCHAR(10),
+    Quantity DECIMAL(18,4),
+    Quantity_unit VARCHAR(20),
+    Quantity_Source VARCHAR(20),
+    TradeValue_USD DECIMAL(18,2)
+)
+
+INSERT INTO staging_trade_data (
+    PrimaryKey,
+    Reporter,
+    [Partner],
+    ItemCodeFAO,
+    Item,
+    Category,
+    [Year],
+    Flow,
+    Quantity,
+    Quantity_unit,
+    Quantity_Source,
+    TradeValue_USD
+)
+SELECT
+    Dataset_primary_key,  
+    Reporter,
+    [Partner],
+    ItemCodeFAO,
+    Item,
+    Category,
+    [Year],
+    Flow,
+    Quantity,
+    Quantity_unit,
+    Quantity_Source,
+    TradeValue_USD
+FROM [depi Gp final cleaned data];
+
+
+INSERT INTO years (year)
+SELECT DISTINCT [Year]
+FROM staging_trade_data
+WHERE [Year] IS NOT NULL
+
+INSERT INTO countries (country_name)
+SELECT DISTINCT Reporter
+FROM staging_trade_data
+WHERE Reporter IS NOT NULL
+
+UNION
+
+SELECT DISTINCT [Partner]
+FROM staging_trade_data
+WHERE [Partner] IS NOT NULL
+
+INSERT INTO products (item_code_fao, product_name, category)
+SELECT DISTINCT
+    ItemCodeFAO,
+    Item,
+    Category
+FROM staging_trade_data
+WHERE ItemCodeFAO IS NOT NULL
+
+INSERT INTO trade_fact (
+    reporter_country_id,
+    partner_country_id,
+    product_id,
+    year,
+    flow_id,
+    unit_id,
+    source_id,
+    quantity,
+    trade_value_usd,
+    dataset_primary_key
+)
+SELECT
+    rc.country_id              AS reporter_country_id,
+    pc.country_id              AS partner_country_id,
+    p.product_id,
+    s.[Year],
+    tf.flow_id,
+    u.unit_id,
+    qs.source_id,
+    CAST(s.Quantity AS DECIMAL(18,2))        AS quantity,
+    CAST(s.TradeValue_USD AS DECIMAL(18,2))  AS trade_value_usd,
+    s.PrimaryKey
+FROM staging_trade_data s
+JOIN countries rc
+    ON s.Reporter = rc.country_name
+JOIN countries pc
+    ON s.[Partner] = pc.country_name
+JOIN products p
+    ON s.ItemCodeFAO = p.item_code_fao
+JOIN trade_flows tf
+    ON s.Flow = tf.flow_type
+JOIN units u
+    ON s.Quantity_unit = u.unit_name
+JOIN quantity_sources qs
+    ON s.Quantity_Source = qs.source_type;
+
+CREATE INDEX idx_fact_year ON trade_fact(year);
+CREATE INDEX idx_fact_product ON trade_fact(product_id);
+CREATE INDEX idx_fact_reporter ON trade_fact(reporter_country_id);
+CREATE INDEX idx_fact_partner ON trade_fact(partner_country_id);
+
+
