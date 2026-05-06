@@ -1,0 +1,60 @@
+Python Data Cleaning:
+Loaded Excel dataset using pandas.read_excel
+Trimmed whitespace from text fields (e.g., Item) to ensure consistency
+Converted TradeValue_1000USD and Quantity to numeric format
+Invalid values were coerced to NaN
+Converted trade values from thousand USD to actual USD
+TradeValue_USD = TradeValue_1000USD × 1000
+Replaced zero or negative quantities with NaN
+Ensured only meaningful trade quantities are used in analysis
+Mapped FAOSTAT items into structured business categories:
+Fruits
+Vegetables
+Dairy & Eggs
+Meat & Poultry
+Oils & Fats
+Cereal & Grains
+Processed Food
+Other Agricultural Products
+Unmapped items were automatically assigned to "Other Agricultural Products"
+Validation step added to detect missing mappings
+Standardized inconsistent units:
+Converted "1000 An" → "An"
+Adjusted quantities accordingly (×1000)
+Ensured consistent measurement across dataset
+ Unit Price Calculation Computed:
+Unit_Price = TradeValue_USD / Quantity
+Applied safeguards to avoid division errors
+Implemented a two-level price-ratio imputation strategy:
+Level 1:
+Median Unit Price by:
+Category + Year + Flow
+Level 2 (Fallback):
+Median Unit Price by:
+Year + Flow
+Missing quantities estimated using:
+Quantity = TradeValue_USD / Median Unit Price
+Data Quality Tagging
+Each row labeled with:
+Original → original value
+Estimated_PriceRatio → imputed value
+Cannot_Impute → insufficient data
+Missing units filled based on category:
+Live Animals → "An"
+Others → "t"
+ Data Pruning
+Removed rows where:
+Quantity is missing AND Trade Value is zero
+Ensured dataset contains only analytically useful records
+
+Power Query was primarily used as a data modeling and validation layer, complementing Python’s role in heavy data cleaning and transformation.
+Quantity Unit Standardization
+Cleaned and validated the Quantity_Unit column to ensure consistency across the dataset
+Applied category-based unit standardization:
+"No" → used only for Bees (count-based measurement)
+"An" → used for all other live animals (number of animals)
+"t" → used for all non-animal products (tonnes)
+Data Type Enforcement
+Ensured correct types for:
+Measures (numeric)
+Dimensions (text)
