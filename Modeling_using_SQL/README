@@ -1,0 +1,59 @@
+The database was designed using a Data Warehouse model based on a central fact table for storing transactional data and supporting dimension tables for organizing repeated values. The purpose of this design is to improve analytical efficiency, simplify querying, ensure data integrity, and eliminate unnecessary redundancy. The model is built on the principle that each record in the main table represents a single trade transaction between two countries for a specific product in a given year, whether it is an export or import operation.
+The system includes a countries table, which stores each country name only once along with a unique automatically generated numeric identifier. This table is used to represent both the Reporter country and the Partner country, preventing duplication of country names in the main table and ensuring consistency during analysis and data relationships.
+A products table was also created to store information about traded products. It includes the FAO Item Code, product name, and product category. Each product has a unique internal identifier used for relationships within the database instead of repeating textual data in every trade record. This approach reduces data size and improves query performance.
+A years table was created to store all available years in the dataset. The year itself is used as the primary key since each year appears only once in this table. This key is then referenced in the main table, allowing the year to appear multiple times in trade records without violating primary key constraints.
+To organize the type of trade operation, a trade_flows table was introduced. It contains fixed values such as Export and Import; each linked to a numeric identifier. This prevents spelling errors and standardizes values used in analysis.
+A units table was also created to store measurement units such as Tonnes and Animals. These are referenced using numeric identifiers instead of repeating text values in every record. The same concept applies to the quantity_sources table, which specifies whether the quantity is Original or Calculated.
+The trade_fact table represents the core of the design. It is responsible for storing quantitative data and financial values. This table includes foreign keys referencing all dimension tables, such as countries, products, years, trade flows, units, and quantity sources. It also contains numeric fields such as quantity and trade value in USD. Additionally, it includes a unique internal key (trade_id) and retains the original key from the source dataset (dataset_primary_key) for tracking and auditing purposes.
+This design allows logical values such as year and trade type to be repeated within the trade_fact table since they are used as foreign keys, while remaining unique in their respective dimension tables. This is a fundamental principle of Data Warehouse design. It ensures referential integrity and prevents invalid or undefined values from being entered.
+The model is highly scalable, allowing new years, products, or countries to be added without modifying the structure of the main table. It is also well-suited for analytics and business intelligence tools such as Power BI and SQL-based analysis, enabling efficient aggregation queries such as analyzing exports by year, product, or partner country.
+Data Warehouse Validation Queries
+This document contains all validation queries executed after loading the trade_fact table. Each query is explained in both English and Arabic to clarify its purpose and importance.
+
+1. Row Count Validation
+SELECT COUNT(*) AS staging_rows FROM staging_trade_data;
+SELECT COUNT(*) AS fact_rows FROM trade_fact;
+This validation compares the number of rows loaded into the fact table against the staging table to ensure that data loading was successful and no major data loss occurred during the ETL process.
+
+2. Foreign Key Integrity Check
+SELECT COUNT(*) AS invalid_rows
+FROM trade_fact
+WHERE reporter_country_id IS NULL
+   OR partner_country_id IS NULL
+   OR product_id IS NULL
+   OR flow_id IS NULL
+   OR unit_id IS NULL
+   OR source_id IS NULL;
+This query ensures that all foreign keys in the fact table are populated correctly and that there are no broken relationships with lookup tables.
+
+3. Numeric Range Validation
+SELECT
+    MIN(quantity) AS min_quantity,
+    MAX(quantity) AS max_quantity,
+    MIN(trade_value_usd) AS min_value,
+    MAX(trade_value_usd) AS max_value
+FROM trade_fact;
+This validation checks that minimum and maximum values for quantity and trade value are logical and within expected ranges.
+
+4. Flow Distribution Check
+SELECT tf.flow_type, COUNT(*) AS cnt
+FROM trade_fact f
+JOIN trade_flows tf ON f.flow_id = tf.flow_id
+GROUP BY tf.flow_type;
+This query validates that trade records are correctly distributed between Import and Export operations.
+
+5. Year Coverage Validation
+SELECT year, COUNT(*) AS cnt
+FROM trade_fact
+GROUP BY year
+ORDER BY year;
+This validation ensures that all years loaded into the years table are represented in the fact table.
+
+6. Zero Quantity Check
+SELECT COUNT(*) AS zero_quantity_rows
+FROM trade_fact
+WHERE quantity = 0;
+This query identifies records with zero quantity, which may be acceptable but should be analytically reviewed.
+Decimal Precision Confirmation
+The following validation confirms that numeric fields are stored using DECIMAL(18,2) as designed, ensuring consistent numeric precision across analytical queries.
+
